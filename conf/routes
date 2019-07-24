@@ -1,1 +1,7 @@
-GET     /a                          controllers.HomeController.action
+GET     /a/fire                          controllers.InjectedController.fireEvent
+GET     /b/fire                          controllers.CompileDIController.fireEvent
+GET     /a/greet                         controllers.InjectedController.greetings
+GET     /b/greet                         controllers.CompileDIController.greetings
+GET     /a/lookup                        controllers.InjectedController.lookupConf
+GET     /b/lookup                        controllers.CompileDIController.lookupConf
+GET     /b/lookupViaParent               controllers.CompileDIController.lookupConfViaParent
