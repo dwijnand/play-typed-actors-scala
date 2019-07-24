@@ -5,3 +5,4 @@ GET     /b/greet                         controllers.CompileDIController.greetin
 GET     /a/lookup                        controllers.InjectedController.lookupConf
 GET     /b/lookup                        controllers.CompileDIController.lookupConf
 GET     /b/lookupViaParent               controllers.CompileDIController.lookupConfViaParent
+GET     /a/lookupViaParent               controllers.InjectedController.lookupConfViaParent

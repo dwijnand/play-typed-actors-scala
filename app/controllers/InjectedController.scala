@@ -54,7 +54,8 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-@Singleton final class  ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(ConfdActor(conf),          "confd-actor1") }
+@Singleton final class  ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(ConfdActor(conf),          "confd-actor1")  }
+@Singleton final class     MkChildProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[MkChild]            { def get() = ConfdChildActor(conf, _)                                 }
 @Singleton final class ParentActorProvider @Inject()(system: ActorSystem, childFactory: MkChild) extends Provider[ActorRef[GetChild]] { def get() = system.spawn(ParentActor(childFactory), "parent-actor1") }
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
@@ -64,7 +65,8 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
 //    bindTypedActor(ConfiguredActor(), "configured-actor")
     // bindActor[ParentActor]("parent-actor")
-    // bind(new TypeLiteral[ActorRef[GetChild]]() {}).toProvider(classOf[ParentActorProvider]).asEagerSingleton()
+    bind(classOf[MkChild]).toProvider(classOf[MkChildProvider]).asEagerSingleton()
+    bind(new TypeLiteral[ActorRef[GetChild]]() {}).toProvider(classOf[ParentActorProvider]).asEagerSingleton()
     // bindActorFactory[ConfiguredChildActor, ConfiguredChildActor.Factory]
     // binder().install(new FactoryModuleBuilder().implement(new TypeLiteral[Behavior[GetChild]]() {}, ???).build(classOf[ConfiguredChildActor.Factory]))
   }
@@ -75,20 +77,23 @@ abstract class SharedController(cc: ControllerComponents) extends AbstractContro
   protected def fooActor: ActorRef[Event]
   protected def helloActor: ActorRef[Greet]
   protected def confdActor: ActorRef[GetConf]
+  protected def parentActor: ActorRef[GetChild]
 
   implicit val timeout: Timeout             = 3.seconds
   implicit val scheduler: Scheduler         = system.toTyped.scheduler
   implicit val ec: ExecutionContextExecutor = system.toTyped.executionContext
 
-  final def fireEvent  = Action { fooActor.tell(Event("a message")); Ok("actors were told a little secret") }
-  final def greetings  = Action.async(helloActor.ask[String](Greet("Dale", _)).map(Ok(_)))
-  final def lookupConf = Action.async(confdActor.ask[String](GetConf(_)).map(Ok(_)))
+  final def fireEvent           = Action { fooActor.tell(Event("a message")); Ok("actors were told a little secret") }
+  final def greetings           = Action.async(helloActor.ask[String](Greet("Dale", _)).map(Ok(_)))
+  final def lookupConf          = Action.async(confdActor.ask[String](GetConf(_)).map(Ok(_)))
+  final def lookupConfViaParent = Action.async(parentActor.ask[ActorRef[GetConf]](GetChild("java.io.tmpdir", _)).flatMap(_.ask[String](GetConf(_))).map(Ok(_)))
 }
 
 @Singleton final class InjectedController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem,
     protected val fooActor: ActorRef[Event],
     protected val helloActor: ActorRef[Greet],
     protected val confdActor: ActorRef[GetConf],
+    protected val parentActor: ActorRef[GetChild],
 ) extends SharedController(cc)
 
 @Singleton final class CompileDIController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem) extends SharedController(cc) {
@@ -96,6 +101,4 @@ abstract class SharedController(cc: ControllerComponents) extends AbstractContro
   val helloActor  = system.spawn(HelloActor(),                          "hello-actor2")
   val confdActor  = system.spawn(ConfdActor(conf),                      "confd-actor2")
   val parentActor = system.spawn(ParentActor(ConfdChildActor(conf, _)), "parent-actor")
-
-  def lookupConfViaParent = Action.async(parentActor.ask[ActorRef[GetConf]](GetChild("java.io.tmpdir", _)).flatMap(_.ask[String](GetConf(_))).map(Ok(_)))
 }
