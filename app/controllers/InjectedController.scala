@@ -69,10 +69,10 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-@Singleton final class       ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(ConfdActor(conf),                                                "confd-actor2")  }
-@Singleton final class  ScalaConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(Behaviors.setup((_: Ctx[GetConf]) => new ScalaConfdActor(conf)), "confd-actor4")  }
-@Singleton final class          MkChildProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[MkChild]            { def get() = ConfdChildActor(conf, _)                                                                       }
-@Singleton final class      ParentActorProvider @Inject()(system: ActorSystem, childFactory: MkChild) extends Provider[ActorRef[GetChild]] { def get() = system.spawn(ParentActor(childFactory),                                       "parent-actor2") }
+final class      ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(ConfdActor(conf),                                                "confd-actor2")  }
+final class ScalaConfdActorProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(Behaviors.setup((_: Ctx[GetConf]) => new ScalaConfdActor(conf)), "confd-actor4")  }
+final class         MkChildProvider @Inject()(system: ActorSystem, conf: Conf)            extends Provider[MkChild]            { def get() = ConfdChildActor(conf, _)                                                                       }
+final class     ParentActorProvider @Inject()(system: ActorSystem, childFactory: MkChild) extends Provider[ActorRef[GetChild]] { def get() = system.spawn(ParentActor(childFactory),                                       "parent-actor2") }
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
@@ -109,7 +109,7 @@ abstract class SharedController(cc: ControllerComponents) extends AbstractContro
   }
 }
 
-@Singleton final class AController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem) extends SharedController(cc) {
+final class AController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem) extends SharedController(cc) {
   val fooActor    = system.spawn(FooActor(),                                                      "foo-actor1")
   val helloActor  = system.spawn(HelloActor(),                                                    "hello-actor1")
   val confdActor  = system.spawn(ConfdActor(conf),                                                "confd-actor1")
@@ -117,7 +117,7 @@ abstract class SharedController(cc: ControllerComponents) extends AbstractContro
   val parentActor = system.spawn(ParentActor(ConfdChildActor(conf, _)),                           "parent-actor1")
 }
 
-@Singleton final class BController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem,
+final class BController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem,
     protected val fooActor: ActorRef[Event],
     protected val helloActor: ActorRef[Greet],
     protected val confdActor: ActorRef[GetConf],
