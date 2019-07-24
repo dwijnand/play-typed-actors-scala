@@ -11,13 +11,13 @@ class HomeControllerSpec extends PlaySpec with GuiceOneAppPerTest with Injecting
   "HomeController" should {
 
     "spawn a" in {
-      val controller = inject[InjectedController]
-      controller mustBe a [InjectedController]
+      val controller = inject[BController]
+      controller mustBe a [BController]
     }
 
     "spawn b" in {
-      val controller = inject[CompileDIController]
-      controller mustBe a [CompileDIController]
+      val controller = inject[AController]
+      controller mustBe a [AController]
     }
 
   }

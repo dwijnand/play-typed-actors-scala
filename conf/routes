@@ -1,8 +1,8 @@
-GET     /a/fire                          controllers.InjectedController.fireEvent
-GET     /b/fire                          controllers.CompileDIController.fireEvent
-GET     /a/greet                         controllers.InjectedController.greetings
-GET     /b/greet                         controllers.CompileDIController.greetings
-GET     /a/lookup                        controllers.InjectedController.lookupConf
-GET     /b/lookup                        controllers.CompileDIController.lookupConf
-GET     /b/lookupViaParent               controllers.CompileDIController.lookupConfViaParent
-GET     /a/lookupViaParent               controllers.InjectedController.lookupConfViaParent
+GET     /a/fire                          controllers.AController.fireEvent
+GET     /b/fire                          controllers.BController.fireEvent
+GET     /a/greet                         controllers.AController.greetings
+GET     /b/greet                         controllers.BController.greetings
+GET     /a/lookup                        controllers.AController.lookupConf
+GET     /b/lookup                        controllers.BController.lookupConf
+GET     /a/lookupViaParent               controllers.AController.lookupConfViaParent
+GET     /b/lookupViaParent               controllers.BController.lookupConfViaParent
