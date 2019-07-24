@@ -1,36 +1,37 @@
 package controllers
 
-import java.lang.reflect.Method
-import scala.concurrent.{ ExecutionContextExecutor, Future }
-import scala.reflect.ClassTag
-import akka.actor.{ Actor, ActorSystem, Props, typed }
-import akka.actor.typed.{ ActorRef, Behavior, Scheduler }
+import akka.actor.typed.javadsl
+import akka.actor.typed.javadsl.Receive
+import akka.actor.typed.javadsl.{ ActorContext => JCtx }
 import akka.actor.typed.scaladsl
-import akka.actor.typed.scaladsl.{ ActorContext, Behaviors }
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors.{ receive, receiveMessage, setup }
 import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed.scaladsl.{ ActorContext => Ctx, Behaviors }
+import akka.actor.typed.{ ActorRef, Behavior, Scheduler }
+import akka.actor.{ Actor, ActorSystem, Props, typed }
+import akka.japi.function.{ Function => JFunction }
 import akka.util.Timeout
 import com.google.inject.assistedinject.{ Assisted, FactoryModuleBuilder }
 import com.google.inject.binder.LinkedBindingBuilder
 import com.google.inject.name.Names
-import akka.japi.function.{ Function => JFunction }
-import com.google.inject.{ AbstractModule, Binder, TypeLiteral }
 import com.google.inject.util.Providers
+import com.google.inject.{ AbstractModule, Binder, TypeLiteral }
+import java.lang.reflect.Method
 import javax.inject._
-import scala.concurrent.duration._
-import akka.actor.typed.javadsl
-import akka.actor.typed.javadsl.Receive
-import play.api.{ Configuration => Conf }
 import play.api.inject.{ Injector, SimpleModule, bind }
 import play.api.libs.concurrent.{ AkkaGuiceSupport, InjectedActorSupport }
 import play.api.mvc._
+import play.api.{ Configuration => Conf }
+import scala.concurrent.duration._
+import scala.concurrent.{ ExecutionContextExecutor, Future }
+import scala.reflect.ClassTag
 
 // TODO: actor name
 // TODO: annotatedWith(Names.named(name))
 object Utils {
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
-  def rcv[A](onMessage: (ActorContext[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
+  def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
 }; import Utils._
 
 final case class Event(name: String)
@@ -43,8 +44,16 @@ object      HelloActor {           def apply()                                  
 object      ConfdActor { @Inject() def apply(conf: Conf)                        = rcv[GetConf]  { case (ctx, GetConf(replyTo))        => replyTo ! lookupConf(conf, "my.cfg")   } }
 object ConfdChildActor { @Inject() def apply(conf: Conf, @Assisted key: String) = rcv[GetConf]  { case (ctx, GetConf(replyTo))        => replyTo ! lookupConf(conf, key)        } }
 object     ParentActor { @Inject() def apply(mkChild: MkChild)                  = rcv[GetChild] { case (ctx, GetChild(key, replyTo))  => replyTo ! ctx.spawn(mkChild(key), key) } }
-final class ScalaFooActor extends scaladsl.AbstractBehavior[Event] { def onMessage(msg: Event) = { println(s"foo => ${msg.name}"); this } }
-final class  JavaFooActor extends  javadsl.AbstractBehavior[Event] { def createReceive = newReceiveBuilder.onAnyMessage { msg => println(s"foo => ${msg.name}"); this }.build() }
+final class        ScalaFooActor                                                   extends scaladsl.AbstractBehavior[Event]    { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")                     ; this } }
+final class      ScalaHelloActor                                                   extends scaladsl.AbstractBehavior[Greet]    { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"                ; this } }
+final class      ScalaConfdActor @Inject() (conf: Conf)                            extends scaladsl.AbstractBehavior[GetConf]  { def onMessage(msg: GetConf)  = { msg.replyTo ! lookupConf(conf, "my.cfg")           ; this } }
+final class ScalaConfdChildActor @Inject() (conf: Conf, @Assisted key: String)     extends scaladsl.AbstractBehavior[GetConf]  { def onMessage(msg: GetConf)  = { msg.replyTo ! lookupConf(conf, key)                ; this } }
+final class     ScalaParentActor @Inject() (mkChild: MkChild, ctx: Ctx[GetChild])  extends scaladsl.AbstractBehavior[GetChild] { def onMessage(msg: GetChild) = { msg.replyTo ! ctx.spawn(mkChild(msg.key), msg.key) ; this } }
+final class         JavaFooActor                                                   extends  javadsl.AbstractBehavior[Event]    { def createReceive = newReceiveBuilder.onAnyMessage { msg => println(s"foo => ${msg.name}")                                 ; this }.build() }
+final class       JavaHelloActor                                                   extends  javadsl.AbstractBehavior[Greet]    { def createReceive = newReceiveBuilder.onAnyMessage { case Greet(name, replyTo)   => replyTo ! s"Hello, $name"              ; this }.build() }
+final class       JavaConfdActor @Inject() (conf: Conf)                            extends  javadsl.AbstractBehavior[GetConf]  { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, "my.cfg")   ; this }.build() }
+final class  JavaConfdChildActor @Inject() (conf: Conf, @Assisted key: String)     extends  javadsl.AbstractBehavior[GetConf]  { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, key)        ; this }.build() }
+final class      JavaParentActor @Inject() (mkChild: MkChild, ctx: JCtx[GetChild]) extends  javadsl.AbstractBehavior[GetChild] { def createReceive = newReceiveBuilder.onAnyMessage { case GetChild(key, replyTo) => replyTo ! ctx.spawn(mkChild(key), key) ; this }.build() }
 
 class TypedActorRefProvider[T](behavior: Behavior[T]) extends Provider[ActorRef[T]] {
   @Inject private var system: ActorSystem = _
