@@ -27,8 +27,12 @@ import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.reflect.ClassTag
 
-// TODO: actor name
-// TODO: annotatedWith(Names.named(name))
+// TODO: no Behaviors.setup
+// TODO: no spawnAnonymous
+// TODO: all class subtypes of Behavior, for the 2 AbstractBehaviors and ES behaviors
+// TODO: bindTypedActor spawn name, but not annotated name
+// TODO: assisted injection
+// TODO: maybe descope DI for functional behavior
 object Utils {
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
