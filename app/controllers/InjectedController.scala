@@ -81,8 +81,16 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
   def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
 
-  def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag]() = {
-    accessBinder.bind(actorRefOf[A]).toProvider(classOfA[P]).asEagerSingleton()
+  def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag](): Unit = {
+    bindTypedProvider2[A, P](actorRefOf[A])
+  }
+
+  def bindTypedProvider2[A, P <: Provider[ActorRef[A]] : ClassTag](actorRefOfA: TypeLiteral[ActorRef[A]]): Unit = {
+    bindTypedProvider3[A](actorRefOfA, classOfA[P])
+  }
+
+  def bindTypedProvider3[A](actorRefOfA: TypeLiteral[ActorRef[A]], cls: Class[_ <: Provider[ActorRef[A]]]): Unit = {
+    accessBinder.bind(actorRefOfA).toProvider(cls).asEagerSingleton()
   }
 
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
@@ -100,6 +108,8 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
     bindTypedProvider[GetConf, ScalaConfdActorProvider]
+//    bindTypedProvider2[GetConf, ScalaConfdActorProvider](new TypeLiteral[ActorRef[GetConf]]() {})
+//    bindTypedProvider3(new TypeLiteral[ActorRef[GetConf]]() {}, classOf[ScalaConfdActorProvider])
 //    bindBehavior[GetConf, ScalaConfdActor]("confd-actor4")
     bind(classOf[MkChild]).toProvider(classOf[MkChildProvider]).asEagerSingleton()
     bind(new TypeLiteral[ActorRef[GetChild]]() {}).toProvider(classOf[ParentActorProvider]).asEagerSingleton()
