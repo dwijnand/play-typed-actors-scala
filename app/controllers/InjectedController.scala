@@ -32,7 +32,8 @@ import scala.reflect.{ ClassTag, classTag }
 // TODO: assisted injection
 // TODO: maybe descope DI for functional behavior
 object Utils {
-  def classOf[A: ClassTag](): Class[A] = classTag[A].runtimeClass.asInstanceOf
+  def rtClass[A: ClassTag](): Class[A]         = classTag[A].runtimeClass.asInstanceOf
+  def rtSubClass[A: ClassTag](): Class[_ <: A] = rtClass[A]
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
 }; import Utils._
