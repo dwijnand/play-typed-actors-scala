@@ -7,7 +7,7 @@ import akka.actor.typed.scaladsl
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.Behaviors.{ receive, receiveMessage, setup }
 import akka.actor.typed.scaladsl.adapter._
-import akka.actor.typed.scaladsl.{ ActorContext => Ctx, Behaviors }
+import akka.actor.typed.scaladsl.{ Behaviors, ActorContext => Ctx }
 import akka.actor.typed.{ ActorRef, Behavior, Scheduler }
 import akka.actor.{ Actor, ActorSystem, Props, typed }
 import akka.japi.function.{ Function => JFunction }
@@ -20,18 +20,19 @@ import com.google.inject.{ AbstractModule, Binder, TypeLiteral }
 import java.lang.reflect.Method
 import javax.inject._
 import play.api.inject.{ Injector, SimpleModule, bind }
-import play.api.libs.concurrent.{ AkkaGuiceSupport, InjectedActorSupport }
+import play.api.libs.concurrent.{ Akka, AkkaGuiceSupport, InjectedActorSupport }
 import play.api.mvc._
 import play.api.{ Configuration => Conf }
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContextExecutor, Future }
-import scala.reflect.ClassTag
+import scala.reflect.{ ClassTag, classTag }
 
 // TODO: all class subtypes of Behavior, for the 2 AbstractBehaviors and ES behaviors
 // TODO: bindTypedActor spawn name, but not annotated name
 // TODO: assisted injection
 // TODO: maybe descope DI for functional behavior
 object Utils {
+  def classOf[A: ClassTag](): Class[A] = classTag[A].runtimeClass.asInstanceOf
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
 }; import Utils._
