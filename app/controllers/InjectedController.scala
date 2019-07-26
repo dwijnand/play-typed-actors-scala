@@ -33,8 +33,8 @@ import scala.reflect.{ ClassTag, classTag }
 // TODO: maybe descope DI for functional behavior
 object Utils {
   def cast[A](value: Any): A                    = value.asInstanceOf[A]
-  def rtClass[A: ClassTag](): Class[A]          = classTag[A].runtimeClass.asInstanceOf
-  def rtSubClass[A: ClassTag](): Class[_ <: A]  = rtClass[A]
+  def classOfA[A: ClassTag](): Class[A]         = classTag[A].runtimeClass.asInstanceOf[Class[A]]
+  def classOfSubA[A: ClassTag](): Class[_ <: A] = classOfA[A]
 
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
@@ -71,7 +71,20 @@ object TypedAkka {
 }
 
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
-  def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T], name: String) = accessBinder.bind(tl).toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name))).asEagerSingleton()
+  def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T], name: String) =
+    accessBinder.bind(tl)
+        .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
+        .asEagerSingleton()
+
+  def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
+  def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
+  def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
+  def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
+
+  def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag]() = {
+    accessBinder.bind(actorRefOf[A]).toProvider(classOfA[P]).asEagerSingleton()
+  }
+
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
@@ -85,7 +98,9 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(new TypeLiteral[ActorRef[Event]]() {}, FooActor(), "foo-actor2")
     bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor(), "hello-actor2")
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
-    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
+//    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
+    bindTypedProvider[GetConf, ScalaConfdActorProvider]
+//    bindBehavior[GetConf, ScalaConfdActor]("confd-actor4")
     bind(classOf[MkChild]).toProvider(classOf[MkChildProvider]).asEagerSingleton()
     bind(new TypeLiteral[ActorRef[GetChild]]() {}).toProvider(classOf[ParentActorProvider]).asEagerSingleton()
     // bindActorFactory[ConfdChildActor, MkChild]
