@@ -4,5 +4,3 @@ GET     /a/greet                         controllers.AController.greetings
 GET     /b/greet                         controllers.BController.greetings
 GET     /a/lookup                        controllers.AController.lookupConf
 GET     /b/lookup                        controllers.BController.lookupConf
-GET     /a/lookupViaParent               controllers.AController.lookupConfViaParent
-GET     /b/lookupViaParent               controllers.BController.lookupConfViaParent
