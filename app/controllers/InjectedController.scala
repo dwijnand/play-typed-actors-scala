@@ -54,10 +54,17 @@ final class    JavaFooActor             extends  javadsl.AbstractBehavior[Event]
 final class  JavaHelloActor             extends  javadsl.AbstractBehavior[Greet]   { def createReceive = newReceiveBuilder.onAnyMessage { case Greet(name, replyTo)   => replyTo ! s"Hello, $name"            ; this }.build() }
 final class  JavaConfdActor(conf: Conf) extends  javadsl.AbstractBehavior[GetConf] { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, "my.cfg") ; this }.build() }
 
-class TypedActorRefProvider[T](behavior: Behavior[T], name: String) extends Provider[ActorRef[T]] {
-  @Inject private var system: ActorSystem = _
-  lazy val get: ActorRef[T] = system.spawn(behavior, name)
+abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
+  @Inject protected var system: ActorSystem = _
+  protected val behavior: Behavior[T]
+  protected val name: String
+  final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
+
+class TypedActorRefProvider[T](
+    final protected val behavior: Behavior[T],
+    final protected val name: String,
+) extends AbstractTypedActorRefProvider[T]
 
 object TypedAkka {
   def typedProviderOf[T](behavior: Behavior[T], name: String) = new TypedActorRefProvider[T](behavior, name)
@@ -84,8 +91,13 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-final class      ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends TypedActorRefProvider[GetConf](ConfdActor(conf), "confd-actor2")
-final class ScalaConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
+final class ConfdActorProvider extends AbstractTypedActorRefProvider[GetConf] {
+  @Inject private var conf: Conf = _
+  protected lazy val behavior    = ConfdActor(conf)
+  protected val name             = "confd-actor2"
+}
+final class ScalaConfdActorProvider @Inject() (conf: Conf)
+    extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
