@@ -15,9 +15,9 @@ import akka.util.Timeout
 import com.google.inject.assistedinject.{ Assisted, FactoryModuleBuilder }
 import com.google.inject.binder.LinkedBindingBuilder
 import com.google.inject.name.Names
-import com.google.inject.util.Providers
+import com.google.inject.util.{ Providers, Types }
 import com.google.inject.{ AbstractModule, Binder, TypeLiteral }
-import java.lang.reflect.Method
+import java.lang.reflect.{ Method, ParameterizedType, Type }
 import javax.inject._
 import play.api.inject.{ Injector, SimpleModule, bind }
 import play.api.libs.concurrent.{ Akka, AkkaGuiceSupport, InjectedActorSupport }
@@ -32,8 +32,10 @@ import scala.reflect.{ ClassTag, classTag }
 // TODO: assisted injection
 // TODO: maybe descope DI for functional behavior
 object Utils {
-  def rtClass[A: ClassTag](): Class[A]         = classTag[A].runtimeClass.asInstanceOf
-  def rtSubClass[A: ClassTag](): Class[_ <: A] = rtClass[A]
+  def cast[A](value: Any): A                    = value.asInstanceOf[A]
+  def rtClass[A: ClassTag](): Class[A]          = classTag[A].runtimeClass.asInstanceOf
+  def rtSubClass[A: ClassTag](): Class[_ <: A]  = rtClass[A]
+
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: (Ctx[A], A) => Unit) = receive[A] { case (ctx, msg) => onMessage(ctx, msg); Behaviors.same }
 }; import Utils._
