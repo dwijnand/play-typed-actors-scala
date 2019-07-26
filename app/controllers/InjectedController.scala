@@ -16,7 +16,7 @@ import com.google.inject.assistedinject.{ Assisted, FactoryModuleBuilder }
 import com.google.inject.binder.LinkedBindingBuilder
 import com.google.inject.name.Names
 import com.google.inject.util.{ Providers, Types }
-import com.google.inject.{ AbstractModule, Binder, TypeLiteral }
+import com.google.inject.{ AbstractModule, Binder, Provides, TypeLiteral }
 import java.lang.reflect.{ Method, ParameterizedType, Type }
 import javax.inject._
 import play.api.inject.{ Injector, SimpleModule, bind }
@@ -43,9 +43,11 @@ object Utils {
 final case class Event(name: String)
 final case class Greet(name: String, replyTo: ActorRef[String])
 final case class GetConf(replyTo: ActorRef[String])
-object   FooActor {           def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")         } }
-object HelloActor {           def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
-object ConfdActor { @Inject() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
+object   FooActor { def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")         } }
+object HelloActor { def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
+object ConfdActor { def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo) => replyTo ! lookupConf(conf, "my.cfg")   } }
+final class ConfdActorModule extends AbstractModule { @Provides() def apply(conf: Conf, system: ActorSystem) = system.spawn(ConfdActor(conf), "confd-actor2") }
+
 final class   ScalaFooActor             extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
 final class ScalaHelloActor             extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
 final class ScalaConfdActor(conf: Conf) extends scaladsl.AbstractBehavior[GetConf] { def onMessage(msg: GetConf)  = { msg.replyTo ! lookupConf(conf, "my.cfg") ; this } }
@@ -55,9 +57,11 @@ final class  JavaHelloActor             extends  javadsl.AbstractBehavior[Greet]
 final class  JavaConfdActor(conf: Conf) extends  javadsl.AbstractBehavior[GetConf] { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, "my.cfg") ; this }.build() }
 
 abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
-  @Inject protected var system: ActorSystem = _
   protected val behavior: Behavior[T]
   protected val name: String
+
+  @Inject protected var system: ActorSystem = _
+
   final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
 
@@ -104,7 +108,7 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(new TypeLiteral[ActorRef[Event]]() {}, FooActor(), "foo-actor2")
     bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor(), "hello-actor2")
 
-    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
+//    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
 
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(new TypeLiteral[ActorRef[GetConf]]() {}, classOf[ScalaConfdActorProvider])

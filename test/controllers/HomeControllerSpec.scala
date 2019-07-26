@@ -1,5 +1,7 @@
 package controllers
 
+import com.google.inject.assistedinject.{ AssistedInjectBinding, AssistedInjectTargetVisitor }
+import com.google.inject.spi.DefaultBindingTargetVisitor
 import org.scalatestplus.play._
 import org.scalatestplus.play.guice._
 import play.api.test._
@@ -18,6 +20,11 @@ class HomeControllerSpec extends PlaySpec with GuiceOneAppPerTest with Injecting
     "spawn b" in {
       val controller = inject[AController]
       controller mustBe a [AController]
+    }
+
+    "injector" in {
+      val _ = inject[com.google.inject.Injector]
+      1 mustBe 1
     }
 
   }
