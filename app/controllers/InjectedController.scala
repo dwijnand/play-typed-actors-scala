@@ -84,8 +84,8 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-final class      ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(ConfdActor(conf),          "confd-actor2")  }
-final class ScalaConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends Provider[ActorRef[GetConf]]  { def get() = system.spawn(new ScalaConfdActor(conf), "confd-actor4")  }
+final class      ConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends TypedActorRefProvider[GetConf](ConfdActor(conf), "confd-actor2")
+final class ScalaConfdActorProvider @Inject()(system: ActorSystem, conf: Conf) extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
