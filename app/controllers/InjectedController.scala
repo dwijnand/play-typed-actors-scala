@@ -70,6 +70,16 @@ class TypedActorRefProvider[T](
     final protected val name: String,
 ) extends AbstractTypedActorRefProvider[T]
 
+final class AnotherTypedActorRefProvider[T: ClassTag](name: String) extends Provider[ActorRef[T]] {
+  @Inject private var system: ActorSystem = _
+  @Inject private var injector: Injector  = _
+
+  lazy val get = {
+    val behavior = injector.instanceOf[Behavior[T]]
+    system.spawn(behavior, name)
+  }
+}
+
 object TypedAkka {
   def typedProviderOf[T](behavior: Behavior[T], name: String) = new TypedActorRefProvider[T](behavior, name)
 }
@@ -109,6 +119,11 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor(), "hello-actor2")
 
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
+    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(new Provider[ActorRef[GetConf]] {
+      @Inject var system: ActorSystem = _
+      @Inject var conf: Conf          = _
+      def get(): ActorRef[GetConf] = system.spawn(ConfdActor(conf), "confd-actor2")
+    })
 
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(new TypeLiteral[ActorRef[GetConf]]() {}, classOf[ScalaConfdActorProvider])
