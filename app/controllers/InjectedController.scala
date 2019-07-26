@@ -112,7 +112,7 @@ abstract class SharedController(cc: ControllerComponents) extends AbstractContro
   }
 }
 
-final class AController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem) extends SharedController(cc) {
+@Singleton final class AController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem) extends SharedController(cc) {
   val fooActor    = system.spawn(FooActor(),                            "foo-actor1")
   val helloActor  = system.spawn(HelloActor(),                          "hello-actor1")
   val confdActor  = system.spawn(ConfdActor(conf),                      "confd-actor1")
@@ -120,7 +120,7 @@ final class AController @Inject()(conf: Conf, cc: ControllerComponents, protecte
   val parentActor = system.spawn(ParentActor(ConfdChildActor(conf, _)), "parent-actor1")
 }
 
-final class BController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem,
+@Singleton final class BController @Inject()(conf: Conf, cc: ControllerComponents, protected val system: ActorSystem,
     protected val fooActor: ActorRef[Event],
     protected val helloActor: ActorRef[Greet],
     protected val confdActor: ActorRef[GetConf],
