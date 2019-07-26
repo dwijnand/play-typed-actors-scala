@@ -27,7 +27,6 @@ import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.reflect.ClassTag
 
-// TODO: no spawnAnonymous
 // TODO: all class subtypes of Behavior, for the 2 AbstractBehaviors and ES behaviors
 // TODO: bindTypedActor spawn name, but not annotated name
 // TODO: assisted injection
@@ -58,17 +57,17 @@ final class       JavaConfdActor(conf: Conf)                            extends 
 final class  JavaConfdChildActor(conf: Conf, @Assisted key: String)     extends  javadsl.AbstractBehavior[GetConf]  { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, key)        ; this }.build() }
 final class      JavaParentActor(mkChild: MkChild, ctx: JCtx[GetChild]) extends  javadsl.AbstractBehavior[GetChild] { def createReceive = newReceiveBuilder.onAnyMessage { case GetChild(key, replyTo) => replyTo ! ctx.spawn(mkChild(key), key) ; this }.build() }
 
-class TypedActorRefProvider[T](behavior: Behavior[T]) extends Provider[ActorRef[T]] {
+class TypedActorRefProvider[T](behavior: Behavior[T], name: String) extends Provider[ActorRef[T]] {
   @Inject private var system: ActorSystem = _
-  lazy val get: ActorRef[T] = system.spawnAnonymous(behavior)
+  lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
 
 object TypedAkka {
-  def typedProviderOf[T](behavior: Behavior[T]) = new TypedActorRefProvider[T](behavior)
+  def typedProviderOf[T](behavior: Behavior[T], name: String) = new TypedActorRefProvider[T](behavior, name)
 }
 
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
-  def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T]) = accessBinder.bind(tl).toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior))).asEagerSingleton()
+  def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T], name: String) = accessBinder.bind(tl).toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name))).asEagerSingleton()
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
@@ -79,8 +78,8 @@ final class     ParentActorProvider @Inject()(system: ActorSystem, childFactory:
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
-    bindTypedActor(new TypeLiteral[ActorRef[Event]]() {}, FooActor())
-    bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor())
+    bindTypedActor(new TypeLiteral[ActorRef[Event]]() {}, FooActor(), "foo-actor2")
+    bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor(), "hello-actor2")
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
     bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
     bind(classOf[MkChild]).toProvider(classOf[MkChildProvider]).asEagerSingleton()
