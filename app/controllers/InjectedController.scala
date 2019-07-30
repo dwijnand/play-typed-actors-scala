@@ -15,22 +15,20 @@ import akka.util.Timeout
 import com.google.inject.assistedinject.{ Assisted, FactoryModuleBuilder }
 import com.google.inject.binder.LinkedBindingBuilder
 import com.google.inject.name.Names
+import com.google.inject.Injector
 import com.google.inject.util.{ Providers, Types }
 import com.google.inject.{ AbstractModule, Binder, Key, Provides, TypeLiteral }
 import java.lang.reflect.{ Method, ParameterizedType, Type }
 import javax.inject._
-import play.api.inject.{ Injector, SimpleModule, bind }
+import play.api.inject.{ SimpleModule, bind }
 import play.api.libs.concurrent.{ Akka, AkkaGuiceSupport, InjectedActorSupport }
 import play.api.mvc._
 import play.api.{ Configuration => Conf }
 import scala.concurrent.duration._
 import scala.concurrent.{ ExecutionContextExecutor, Future }
 import scala.reflect.{ ClassTag, classTag }
+import com.google.inject.Module
 
-// TODO: all class subtypes of Behavior, for the 2 AbstractBehaviors and ES behaviors
-// TODO: bindTypedActor spawn name, but not annotated name
-// TODO: assisted injection
-// TODO: maybe descope DI for functional behavior
 object Utils {
   def cast[A](value: Any): A                    = value.asInstanceOf[A]
   def classOfA[A: ClassTag](): Class[A]         = classTag[A].runtimeClass.asInstanceOf[Class[A]]
@@ -47,56 +45,24 @@ object   FooActor { def apply()           = rcv[Event]   { msg                  
 object HelloActor { def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
 object ConfdActor extends AbstractModule { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
 
-final class   ScalaFooActor             extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
-final class ScalaHelloActor             extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
-final class ScalaConfdActor(conf: Conf) extends scaladsl.AbstractBehavior[GetConf] { def onMessage(msg: GetConf)  = { msg.replyTo ! lookupConf(conf, "my.cfg") ; this } }
+final class   ScalaFooActor                        extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
+final class ScalaHelloActor                        extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
+final class ScalaConfdActor @Inject() (conf: Conf) extends scaladsl.AbstractBehavior[GetConf] { def onMessage(msg: GetConf)  = { msg.replyTo ! lookupConf(conf, "my.cfg") ; this } }
 
 final class    JavaFooActor             extends  javadsl.AbstractBehavior[Event]   { def createReceive = newReceiveBuilder.onAnyMessage { msg => println(s"foo => ${msg.name}")                               ; this }.build() }
 final class  JavaHelloActor             extends  javadsl.AbstractBehavior[Greet]   { def createReceive = newReceiveBuilder.onAnyMessage { case Greet(name, replyTo)   => replyTo ! s"Hello, $name"            ; this }.build() }
 final class  JavaConfdActor(conf: Conf) extends  javadsl.AbstractBehavior[GetConf] { def createReceive = newReceiveBuilder.onAnyMessage { case GetConf(replyTo)       => replyTo ! lookupConf(conf, "my.cfg") ; this }.build() }
 
-abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
-  protected val behavior: Behavior[T]
-  protected val name: String
-
-  @Inject protected var system: ActorSystem = _
-
-  final lazy val get: ActorRef[T] = system.spawn(behavior, name)
+class TypedActorRefProvider[T](final protected val behavior: Behavior[T], final protected val name: String) extends Provider[ActorRef[T]] {
+  @Inject final protected var system: ActorSystem = _
+               final lazy val get: ActorRef[T]    = system.spawn(behavior, name)
 }
-
 final class TypedActorRefProvider2[T: ClassTag](val name: String) extends Provider[ActorRef[T]] with ActorRefTypes {
-  @Inject protected var system: ActorSystem                  = _
-  @Inject protected var injector: com.google.inject.Injector = _
-
-  lazy val get: ActorRef[T] = system.spawn(injector.getInstance(Key.get(behaviorOf[T])), name)
+  @Inject protected var system: ActorSystem   = _
+  @Inject protected var injector: Injector    = _
+            private def behavior: Behavior[T] = injector.getInstance(Key.get(behaviorOf[T]))
+               lazy val get: ActorRef[T]      = system.spawn(behavior, name)
 }
-
-abstract class TypedActorRefProvider3[T](val name: String) extends Provider[ActorRef[T]] {
-  @Inject final protected var system: ActorSystem   = _
-  protected var behavior: Behavior[T]
-
-  final lazy val get: ActorRef[T] = system.spawn(behavior, name)
-}
-
-class TypedActorRefProvider[T](
-    final protected val behavior: Behavior[T],
-    final protected val name: String,
-) extends AbstractTypedActorRefProvider[T]
-
-final class AnotherTypedActorRefProvider[T: ClassTag](name: String) extends Provider[ActorRef[T]] {
-  @Inject private var system: ActorSystem = _
-  @Inject private var injector: Injector  = _
-
-  lazy val get = {
-    val behavior = injector.instanceOf[Behavior[T]]
-    system.spawn(behavior, name)
-  }
-}
-
-object TypedAkka {
-  def typedProviderOf[T](behavior: Behavior[T], name: String) = new TypedActorRefProvider[T](behavior, name)
-}
-
 trait ActorRefTypes {
   /** Equivalent to `new TypeLiteral[ActorRef[A]]() {}`. */
   final def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
@@ -104,18 +70,15 @@ trait ActorRefTypes {
   final def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
   final def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
   final def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
-}
-
-object ActorRefTypes extends ActorRefTypes
-
+}; object ActorRefTypes extends ActorRefTypes
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport with ActorRefTypes { self: AbstractModule =>
-  def bindTypedActor[T: ClassTag](behavior: Behavior[T], name: String) =
+  def bindTypedActor[T: ClassTag](behavior: Behavior[T], name: String) = {
     accessBinder
         .bind(actorRefOf[T])
-        .toProvider(TypedAkka.typedProviderOf[T](behavior, name))
+        .toProvider(new TypedActorRefProvider[T](behavior, name))
         .asEagerSingleton()
-
-  def bindTypedActorRefOf[T: ClassTag](module: com.google.inject.Module, name: String) = {
+  }
+  def bindTypedActorRefOf[T: ClassTag](module: Module, name: String) = {
     accessBinder.install(module)
     accessBinder
         .bind(actorRefOf[T])
@@ -123,26 +86,27 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport with ActorRefTypes { self: 
         .asEagerSingleton()
   }
 
-  def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag](): Unit =
-    bindTypedProvider2[A, P](actorRefOf[A])
-  def bindTypedProvider2[A, P <: Provider[ActorRef[A]] : ClassTag](actorRefOfA: TypeLiteral[ActorRef[A]]): Unit =
-    bindTypedProvider3[A](actorRefOfA, classOfA[P])
-  def bindTypedProvider3[A](actorRefOfA: TypeLiteral[ActorRef[A]], cls: Class[_ <: Provider[ActorRef[A]]]): Unit =
-    accessBinder.bind(actorRefOfA).toProvider(cls).asEagerSingleton()
+  def bindTypedProvider [A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag]()                             : Unit = bindTypedProvider2[A, P](actorRefOf[A])
+  def bindTypedProvider2[A, P <: Provider[ActorRef[A]] : ClassTag](actorRefOfA: TypeLiteral[ActorRef[A]])  : Unit = bindTypedProvider3[A](actorRefOfA, classOfA[P])
+  def bindTypedProvider3[A](actorRefOfA: TypeLiteral[ActorRef[A]], cls: Class[_ <: Provider[ActorRef[A]]]) : Unit = accessBinder.bind(actorRefOfA).toProvider(cls).asEagerSingleton()
 
-  private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
+  private def accessBinder: Binder = {
+    val method: Method = classOf[AbstractModule].getDeclaredMethod("binder")
+    if (!method.isAccessible)
+      method.setAccessible(true)
+    method.invoke(this).asInstanceOf[Binder]
+  }
 }
 
-final class ScalaConfdActorProvider @Inject() (conf: Conf)
-    extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
+final class ScalaConfdActorProvider @Inject() (conf: Conf) extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
     bindTypedActor(FooActor(), "foo-actor2")
     bindTypedActor(HelloActor(), "hello-actor2")
-    bindTypedActorRefOf[GetConf](ConfdActor, "confd-actor2")
+//    bindTypedActorRefOf[GetConf](ConfdActor, "confd-actor2")
 
-//    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
+    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(actorRefOf[GetConf], classOf[ScalaConfdActorProvider])
 //    bindTypedProvider2[GetConf, ScalaConfdActorProvider](actorRefOf[GetConf])
 //    bindTypedProvider[GetConf, ScalaConfdActorProvider]
