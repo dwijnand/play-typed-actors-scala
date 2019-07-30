@@ -108,9 +108,11 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
-    bindTypedActor(FooActor(), "foo-actor2")
-    bindTypedActor(HelloActor(), "hello-actor2")
+//    bindTypedActor(FooActor(), "foo-actor2")
+//    bindTypedActor(HelloActor(), "hello-actor2")
 //    bindTypedActor2[GetConf](ConfdActor, "confd-actor2")
+    bindTypedActor3[Event, ScalaFooActor]("foo-actor4")
+    bindTypedActor3[Greet, ScalaHelloActor]("hello-actor4")
     bindTypedActor3[GetConf, ScalaConfdActor]("confd-actor4")
   }
 }
