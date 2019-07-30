@@ -41,11 +41,11 @@ object Utils {
 final case class Event(name: String)
 final case class Greet(name: String, replyTo: ActorRef[String])
 final case class GetConf(replyTo: ActorRef[String])
-object   FooActor                             {             def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")         } }
-object HelloActor                             {             def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
-object ConfdActor extends MkBehavior[GetConf] { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
+object   FooActor                               {             def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")       } }
+object HelloActor                               {             def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"            } }
+object ConfdActor extends ActorFactory[GetConf] { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg") } }
 
-trait MkBehavior[A] extends AbstractModule
+trait ActorFactory[A] extends AbstractModule
 
 final class   ScalaFooActor                        extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
 final class ScalaHelloActor                        extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
@@ -79,7 +79,7 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
     bindTypedActor[A](name)
   }
 
-  def bindTypedActor[A: ClassTag](mkBehavior: MkBehavior[A], name: String): Unit = {
+  def bindTypedActor[A: ClassTag](mkBehavior: ActorFactory[A], name: String): Unit = {
     binder2.install(mkBehavior)
     bindTypedActor[A](name)
   }
