@@ -16,7 +16,7 @@ import com.google.inject.assistedinject.{ Assisted, FactoryModuleBuilder }
 import com.google.inject.binder.LinkedBindingBuilder
 import com.google.inject.name.Names
 import com.google.inject.util.{ Providers, Types }
-import com.google.inject.{ AbstractModule, Binder, Provides, TypeLiteral }
+import com.google.inject.{ AbstractModule, Binder, Key, Provides, TypeLiteral }
 import java.lang.reflect.{ Method, ParameterizedType, Type }
 import javax.inject._
 import play.api.inject.{ Injector, SimpleModule, bind }
@@ -64,11 +64,11 @@ abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
   final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
 
-final class TypedActorRefProvider2[T](val name: String) extends Provider[ActorRef[T]] {
-  @Inject protected var behavior: Behavior[T] = _
-  @Inject protected var system: ActorSystem   = _
+final class TypedActorRefProvider2[T: ClassTag](val name: String) extends Provider[ActorRef[T]] with ActorRefTypes {
+  @Inject protected var system: ActorSystem                  = _
+  @Inject protected var injector: com.google.inject.Injector = _
 
-  lazy val get: ActorRef[T] = system.spawn(behavior, name)
+  lazy val get: ActorRef[T] = system.spawn(injector.getInstance(Key.get(behaviorOf[T])), name)
 }
 
 abstract class TypedActorRefProvider3[T](val name: String) extends Provider[ActorRef[T]] {
@@ -97,18 +97,23 @@ object TypedAkka {
   def typedProviderOf[T](behavior: Behavior[T], name: String) = new TypedActorRefProvider[T](behavior, name)
 }
 
-trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
+trait ActorRefTypes {
+  /** Equivalent to `new TypeLiteral[ActorRef[A]]() {}`. */
+  final def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
+  final def behaviorOf[A: ClassTag]            = tpeLit[Behavior[A]](classOf[Behavior[_]], classOfA[A])
+  final def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
+  final def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
+  final def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
+}
+
+object ActorRefTypes extends ActorRefTypes
+
+trait AkkaTypedGuiceSupport extends AkkaGuiceSupport with ActorRefTypes { self: AbstractModule =>
   def bindTypedActor[T: ClassTag](behavior: Behavior[T], name: String) =
     accessBinder
         .bind(actorRefOf[T])
         .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
         .asEagerSingleton()
-
-  /** Equivalent to `new TypeLiteral[ActorRef[A]]() {}`. */
-  def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
-  def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
-  def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
-  def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
 
   def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag](): Unit =
     bindTypedProvider2[A, P](actorRefOf[A])
@@ -129,10 +134,10 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(HelloActor(), "hello-actor2")
 
     install(ConfdActor)
-//    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider2[GetConf]("confd-actor2")).asEagerSingleton()
-    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider3[GetConf]("confd-actor2") {
-      @Inject var behavior: Behavior[GetConf] = _
-    }).asEagerSingleton()
+    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider2[GetConf]("confd-actor2")).asEagerSingleton()
+//    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider3[GetConf]("confd-actor2") {
+//      @Inject var behavior: Behavior[GetConf] = _
+//    }).asEagerSingleton()
 //    bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
 //      @Inject var system: ActorSystem         = _
 //      @Inject var behavior: Behavior[GetConf] = _
