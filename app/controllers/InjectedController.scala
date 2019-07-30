@@ -125,7 +125,7 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
       @Inject var system: ActorSystem = _
       @Inject var conf: Conf          = _
       def get(): ActorRef[GetConf] = system.spawn(ConfdActor(conf), "confd-actor2")
-    })
+    }).asEagerSingleton()
 
 //    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(actorRefOf[GetConf], classOf[ScalaConfdActorProvider])
