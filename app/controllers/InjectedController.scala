@@ -85,9 +85,9 @@ object TypedAkka {
 }
 
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
-  def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T], name: String) =
+  def bindTypedActor[T: ClassTag](behavior: Behavior[T], name: String) =
     accessBinder
-        .bind(tl)
+        .bind(actorRefOf[T])
         .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
         .asEagerSingleton()
 
@@ -116,8 +116,8 @@ final class ScalaConfdActorProvider @Inject() (conf: Conf)
 
 final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
-    bindTypedActor(new TypeLiteral[ActorRef[Event]]() {}, FooActor(), "foo-actor2")
-    bindTypedActor(new TypeLiteral[ActorRef[Greet]]() {}, HelloActor(), "hello-actor2")
+    bindTypedActor(FooActor(), "foo-actor2")
+    bindTypedActor(HelloActor(), "hello-actor2")
 
 //    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
     bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(new Provider[ActorRef[GetConf]] {
