@@ -32,7 +32,6 @@ import com.google.inject.Module
 object Utils {
   def cast[A](value: Any): A                    = value.asInstanceOf[A]
   def classOfA[A: ClassTag](): Class[A]         = classTag[A].runtimeClass.asInstanceOf[Class[A]]
-  def classOfSubA[A: ClassTag](): Class[_ <: A] = classOfA[A]
 
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
   def rcv[A](onMessage: A => Unit): Behavior[A] = receiveMessage[A] { msg => onMessage(msg); Behaviors.same }
@@ -43,9 +42,9 @@ final case class Greet(name: String, replyTo: ActorRef[String])
 final case class GetConf(replyTo: ActorRef[String])
 object   FooActor                               {             def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")       } }
 object HelloActor                               {             def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"            } }
-object ConfdActor extends ActorFactory[GetConf] { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg") } }
+object ConfdActor extends ActorModule[GetConf] { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo) => replyTo ! lookupConf(conf, "my.cfg") } }
 
-trait ActorFactory[A] extends AbstractModule
+trait ActorModule[A] extends AbstractModule
 
 final class   ScalaFooActor                        extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
 final class ScalaHelloActor                        extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
@@ -76,24 +75,21 @@ final class TypedActorRefProvider[A: ClassTag](val name: String) extends Provide
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   def bindTypedActor[A: ClassTag](b: Behavior[A], name: String): Unit = {
     binder2.bind(behaviorOf[A]).toInstance(b)
-    bindTypedActor[A](name)
+    bindTypedActorRef[A](name)
   }
 
-  def bindTypedActor[A: ClassTag](mkBehavior: ActorFactory[A], name: String): Unit = {
-    binder2.install(mkBehavior)
-    bindTypedActor[A](name)
+  def bindTypedActor[A: ClassTag](actorModule: ActorModule[A], name: String): Unit = {
+    binder2.install(actorModule)
+    bindTypedActorRef[A](name)
   }
 
   def bindTypedActor[A: ClassTag](cls: Class[_ <: Behavior[A]], name: String): Unit = {
     binder2.bind(behaviorOf[A]).to(cls).asEagerSingleton()
-    bindTypedActor[A](name)
+    bindTypedActorRef[A](name)
   }
 
-  def bindTypedActor[A: ClassTag](name: String): Unit = {
-    binder2
-        .bind(actorRefOf[A])
-        .toProvider(new TypedActorRefProvider[A](name))
-        .asEagerSingleton()
+  def bindTypedActorRef[A: ClassTag](name: String): Unit = {
+    binder2.bind(actorRefOf[A]).toProvider(new TypedActorRefProvider[A](name)).asEagerSingleton()
   }
 
   private def binder2: Binder = {
