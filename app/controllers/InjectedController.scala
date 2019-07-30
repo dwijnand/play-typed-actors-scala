@@ -45,7 +45,7 @@ final case class Greet(name: String, replyTo: ActorRef[String])
 final case class GetConf(replyTo: ActorRef[String])
 object   FooActor { def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")         } }
 object HelloActor { def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
-object ConfdActor { def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo) => replyTo ! lookupConf(conf, "my.cfg")   } }
+object ConfdActor { def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
 final class ConfdActorModule extends AbstractModule { @Provides() def apply(conf: Conf, system: ActorSystem) = system.spawn(ConfdActor(conf), "confd-actor2") }
 
 final class   ScalaFooActor             extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
@@ -86,7 +86,8 @@ object TypedAkka {
 
 trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   def bindTypedActor[T](tl: TypeLiteral[ActorRef[T]], behavior: Behavior[T], name: String) =
-    accessBinder.bind(tl)
+    accessBinder
+        .bind(tl)
         .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
         .asEagerSingleton()
 
