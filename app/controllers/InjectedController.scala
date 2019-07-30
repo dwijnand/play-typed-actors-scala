@@ -91,10 +91,11 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
         .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
         .asEagerSingleton()
 
-  def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
-  def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
-  def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
+  /** Equivalent to `new TypeLiteral[ActorRef[A]]() {}`. */
   def actorRefOf[A: ClassTag]            = tpeLit[ActorRef[A]](classOf[ActorRef[_]], classOfA[A])
+  def tpeLit[A](tpe: Type, targs: Type*) = cast[TypeLiteral[A]](tpeLitGet(typeCons(tpe, targs: _*)))
+  def tpeLitGet(tpe: Type)               = TypeLiteral.get(tpe)
+  def typeCons(tpe: Type, targs: Type*)  = Types.newParameterizedType(tpe, targs: _*)
 
   def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag](): Unit =
     bindTypedProvider2[A, P](actorRefOf[A])
@@ -119,16 +120,16 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(FooActor(), "foo-actor2")
     bindTypedActor(HelloActor(), "hello-actor2")
 
-//    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
-    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(new Provider[ActorRef[GetConf]] {
+//    bind(actorRefOf[GetConf]).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
+    bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
       @Inject var system: ActorSystem = _
       @Inject var conf: Conf          = _
       def get(): ActorRef[GetConf] = system.spawn(ConfdActor(conf), "confd-actor2")
     })
 
-//    bind(new TypeLiteral[ActorRef[GetConf]]() {}).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
-//    bindTypedProvider3(new TypeLiteral[ActorRef[GetConf]]() {}, classOf[ScalaConfdActorProvider])
-//    bindTypedProvider2[GetConf, ScalaConfdActorProvider](new TypeLiteral[ActorRef[GetConf]]() {})
+//    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
+//    bindTypedProvider3(actorRefOf[GetConf], classOf[ScalaConfdActorProvider])
+//    bindTypedProvider2[GetConf, ScalaConfdActorProvider](actorRefOf[GetConf])
 //    bindTypedProvider[GetConf, ScalaConfdActorProvider]
   }
 }
