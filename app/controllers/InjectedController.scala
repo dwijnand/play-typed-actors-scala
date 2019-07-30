@@ -37,7 +37,7 @@ object Utils {
   def classOfSubA[A: ClassTag](): Class[_ <: A] = classOfA[A]
 
   def lookupConf(conf: Conf, key: String) = conf.getOptional[String](key).getOrElse("none")
-  def rcv[A](onMessage: A => Unit) = receiveMessage[A] { msg => onMessage(msg); Behaviors.same }
+  def rcv[A](onMessage: A => Unit): Behavior[A] = receiveMessage[A] { msg => onMessage(msg); Behaviors.same }
 }; import Utils._
 
 final case class Event(name: String)
@@ -45,8 +45,7 @@ final case class Greet(name: String, replyTo: ActorRef[String])
 final case class GetConf(replyTo: ActorRef[String])
 object   FooActor { def apply()           = rcv[Event]   { msg                       => println(s"foo => ${msg.name}")         } }
 object HelloActor { def apply()           = rcv[Greet]   { case Greet(name, replyTo) => replyTo ! s"Hello, $name"              } }
-object ConfdActor { def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
-final class ConfdActorModule extends AbstractModule { @Provides() def apply(conf: Conf, system: ActorSystem) = system.spawn(ConfdActor(conf), "confd-actor2") }
+object ConfdActor extends AbstractModule { @Provides() def apply(conf: Conf) = rcv[GetConf] { case GetConf(replyTo)     => replyTo ! lookupConf(conf, "my.cfg")   } }
 
 final class   ScalaFooActor             extends scaladsl.AbstractBehavior[Event]   { def onMessage(msg: Event)    = { println(s"foo => ${msg.name}")           ; this } }
 final class ScalaHelloActor             extends scaladsl.AbstractBehavior[Greet]   { def onMessage(msg: Greet)    = { msg.replyTo ! s"Hello, ${msg.name}"      ; this } }
@@ -61,6 +60,13 @@ abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
   protected val name: String
 
   @Inject protected var system: ActorSystem = _
+
+  final lazy val get: ActorRef[T] = system.spawn(behavior, name)
+}
+
+abstract class AbstractTypedActorRefProvider2[T](val name: String) extends Provider[ActorRef[T]] {
+  @Inject protected var behavior: Behavior[T] = _
+  @Inject protected var system: ActorSystem   = _
 
   final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
@@ -107,11 +113,7 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-final class ConfdActorProvider extends AbstractTypedActorRefProvider[GetConf] {
-  @Inject private var conf: Conf = _
-  protected lazy val behavior    = ConfdActor(conf)
-  protected val name             = "confd-actor2"
-}
+final class ConfdActorProvider extends AbstractTypedActorRefProvider2[GetConf]("confd-actor2")
 final class ScalaConfdActorProvider @Inject() (conf: Conf)
     extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
 
@@ -120,11 +122,13 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(FooActor(), "foo-actor2")
     bindTypedActor(HelloActor(), "hello-actor2")
 
+    install(ConfdActor)
+
 //    bind(actorRefOf[GetConf]).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
     bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
-      @Inject var system: ActorSystem = _
-      @Inject var conf: Conf          = _
-      def get(): ActorRef[GetConf] = system.spawn(ConfdActor(conf), "confd-actor2")
+      @Inject var system: ActorSystem         = _
+      @Inject var behavior: Behavior[GetConf] = _
+      def get(): ActorRef[GetConf] = system.spawn(behavior, "confd-actor2")
     }).asEagerSingleton()
 
 //    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
