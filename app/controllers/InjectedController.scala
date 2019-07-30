@@ -112,8 +112,16 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport with ActorRefTypes { self: 
   def bindTypedActor[T: ClassTag](behavior: Behavior[T], name: String) =
     accessBinder
         .bind(actorRefOf[T])
-        .toProvider(Providers.guicify(TypedAkka.typedProviderOf[T](behavior, name)))
+        .toProvider(TypedAkka.typedProviderOf[T](behavior, name))
         .asEagerSingleton()
+
+  def bindTypedActorRefOf[T: ClassTag](module: com.google.inject.Module, name: String) = {
+    accessBinder.install(module)
+    accessBinder
+        .bind(actorRefOf[T])
+        .toProvider(new TypedActorRefProvider2[T](name))
+        .asEagerSingleton()
+  }
 
   def bindTypedProvider[A: ClassTag, P <: Provider[ActorRef[A]] : ClassTag](): Unit =
     bindTypedProvider2[A, P](actorRefOf[A])
@@ -132,17 +140,7 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
   override def configure(): Unit = {
     bindTypedActor(FooActor(), "foo-actor2")
     bindTypedActor(HelloActor(), "hello-actor2")
-
-    install(ConfdActor)
-    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider2[GetConf]("confd-actor2")).asEagerSingleton()
-//    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider3[GetConf]("confd-actor2") {
-//      @Inject var behavior: Behavior[GetConf] = _
-//    }).asEagerSingleton()
-//    bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
-//      @Inject var system: ActorSystem         = _
-//      @Inject var behavior: Behavior[GetConf] = _
-//      def get(): ActorRef[GetConf] = system.spawn(behavior, "confd-actor2")
-//    }).asEagerSingleton()
+    bindTypedActorRefOf[GetConf](ConfdActor, "confd-actor2")
 
 //    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(actorRefOf[GetConf], classOf[ScalaConfdActorProvider])
