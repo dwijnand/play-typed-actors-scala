@@ -64,9 +64,16 @@ abstract class AbstractTypedActorRefProvider[T] extends Provider[ActorRef[T]] {
   final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
 
-abstract class AbstractTypedActorRefProvider2[T](val name: String) extends Provider[ActorRef[T]] {
+final class TypedActorRefProvider2[T](val name: String) extends Provider[ActorRef[T]] {
   @Inject protected var behavior: Behavior[T] = _
   @Inject protected var system: ActorSystem   = _
+
+  lazy val get: ActorRef[T] = system.spawn(behavior, name)
+}
+
+abstract class TypedActorRefProvider3[T](val name: String) extends Provider[ActorRef[T]] {
+  @Inject final protected var system: ActorSystem   = _
+  protected var behavior: Behavior[T]
 
   final lazy val get: ActorRef[T] = system.spawn(behavior, name)
 }
@@ -113,7 +120,6 @@ trait AkkaTypedGuiceSupport extends AkkaGuiceSupport { self: AbstractModule =>
   private def accessBinder: Binder = { val method: Method = classOf[AbstractModule].getDeclaredMethod("binder"); if (!method.isAccessible) method.setAccessible(true); method.invoke(this).asInstanceOf[Binder] }
 }
 
-final class ConfdActorProvider extends AbstractTypedActorRefProvider2[GetConf]("confd-actor2")
 final class ScalaConfdActorProvider @Inject() (conf: Conf)
     extends TypedActorRefProvider[GetConf](new ScalaConfdActor(conf), "confd-actor4")
 
@@ -123,13 +129,15 @@ final class AppModule extends AbstractModule with AkkaTypedGuiceSupport {
     bindTypedActor(HelloActor(), "hello-actor2")
 
     install(ConfdActor)
-
-//    bind(actorRefOf[GetConf]).toProvider(classOf[ConfdActorProvider]).asEagerSingleton()
-    bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
-      @Inject var system: ActorSystem         = _
+//    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider2[GetConf]("confd-actor2")).asEagerSingleton()
+    bind(actorRefOf[GetConf]).toProvider(new TypedActorRefProvider3[GetConf]("confd-actor2") {
       @Inject var behavior: Behavior[GetConf] = _
-      def get(): ActorRef[GetConf] = system.spawn(behavior, "confd-actor2")
     }).asEagerSingleton()
+//    bind(actorRefOf[GetConf]).toProvider(new Provider[ActorRef[GetConf]] {
+//      @Inject var system: ActorSystem         = _
+//      @Inject var behavior: Behavior[GetConf] = _
+//      def get(): ActorRef[GetConf] = system.spawn(behavior, "confd-actor2")
+//    }).asEagerSingleton()
 
 //    bind(actorRefOf[GetConf]).toProvider(classOf[ScalaConfdActorProvider]).asEagerSingleton()
 //    bindTypedProvider3(actorRefOf[GetConf], classOf[ScalaConfdActorProvider])
